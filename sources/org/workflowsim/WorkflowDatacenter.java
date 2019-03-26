@@ -17,6 +17,7 @@ package org.workflowsim;
 
 import java.util.Iterator;
 import java.util.List;
+
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.CloudletScheduler;
 import org.cloudbus.cloudsim.Consts;
@@ -25,6 +26,8 @@ import org.cloudbus.cloudsim.DatacenterCharacteristics;
 import org.cloudbus.cloudsim.Host;
 import org.cloudbus.cloudsim.Log;
 import org.cloudbus.cloudsim.Storage;
+import org.cloudbus.cloudsim.HybridStorage;
+import org.cloudbus.cloudsim.File;
 import org.cloudbus.cloudsim.Vm;
 import org.cloudbus.cloudsim.VmAllocationPolicy;
 import org.cloudbus.cloudsim.core.CloudSim;
@@ -45,12 +48,34 @@ import org.workflowsim.utils.Parameters.FileType;
  */
 public class WorkflowDatacenter extends Datacenter {
 
+    private HybridStorage mHybridStorage = null;
+    private int[] mStorageStrategy = null;
+    private int currentJobID = 0;
+
     public WorkflowDatacenter(String name,
             DatacenterCharacteristics characteristics,
             VmAllocationPolicy vmAllocationPolicy,
             List<Storage> storageList,
             double schedulingInterval) throws Exception {
         super(name, characteristics, vmAllocationPolicy, storageList, schedulingInterval);
+    }
+
+    /**
+     * Init HybridStorage.
+     */
+    public void setHybridStorage() {
+      try {
+        mHybridStorage = new HybridStorage();
+      } catch (Exception e) {
+         e.printStackTrace();
+      }
+    }
+
+    /**
+     * Init storage strategy.
+     */
+    public void setStorageStrategy(int[] strategy) {
+      mStorageStrategy = strategy;
     }
 
     /**
@@ -117,20 +142,26 @@ public class WorkflowDatacenter extends Datacenter {
                 default:
                     break;
             }
+	    currentJobID = job.getCloudletId() - 1;
+	    if (currentJobID < 0)
+              currentJobID = 0;
+            double fileTransferTime = 0.0;
 
             /**
              * Stage-in file && Shared based on the file.system
              */
             if (job.getClassType() == ClassType.STAGE_IN.value) {
-                stageInFile2FileSystem(job);
+                Log.printLine("Job " + currentJobID + " is STAGE_IN job");
+                fileTransferTime += stageInFile2FileSystem(job);
             }
 
             /**
              * Add data transfer time (communication cost
              */
-            double fileTransferTime = 0.0;
+
             if (job.getClassType() == ClassType.COMPUTE.value) {
-                fileTransferTime = processDataStageInForComputeJob(job.getFileList(), job);
+                fileTransferTime += processDataStageInForComputeJob(job.getFileList(), job);
+                Log.printLine("Job ID: " + job.getCloudletId() + " file transferTime is " + fileTransferTime);
             }
 
             CloudletScheduler scheduler = vm.getCloudletScheduler();
@@ -188,34 +219,34 @@ public class WorkflowDatacenter extends Datacenter {
      * @pre $none
      * @post $none
      */
-    private void stageInFile2FileSystem(Job job) {
+    private double stageInFile2FileSystem(Job job) {
+        double time = 0.0;
         List<FileItem> fList = job.getFileList();
-
-        for (FileItem file : fList) {
-            switch (ReplicaCatalog.getFileSystem()) {
-                /**
-                 * For local file system, add it to local storage (data center
-                 * name)
-                 */
-                case LOCAL:
-                    ReplicaCatalog.addFileToStorage(file.getName(), this.getName());
-                    /**
-                     * Is it not really needed currently but it is left for
-                     * future usage
-                     */
-                    //ClusterStorage storage = (ClusterStorage) getStorageList().get(0);
-                    //storage.addFile(file);
-                    break;
-                /**
-                 * For shared file system, add it to the shared storage
-                 */
-                case SHARED:
-                    ReplicaCatalog.addFileToStorage(file.getName(), this.getName());
-                    break;
-                default:
-                    break;
+        try {
+          for (FileItem file : fList) {
+            ReplicaCatalog.addFileToStorage(file.getName(), this.getName());
+            int fsize = (int) file.getSize()/1024/1024;
+            int myid = -1;
+	    if (fsize == 0)
+		fsize = 1;
+            if (!mHybridStorage.contains(file.getName())) {
+                  myid = mHybridStorage.addFile(new File(file.getName(), fsize), mStorageStrategy[currentJobID]);
+		   Log.printLine("Debug!!! Stage in file " + file.getName());
+            } else {
+                  Log.printLine("Hybrid storage has contained file " + file.getName() + ", do not add again");
             }
+            if (myid != -1) {
+              //Log.printLine("addFile to storage once");
+              mStorageStrategy[currentJobID] = myid;
+              time += mHybridStorage.predictFileWriteTime(file.getSize(), myid);
+            } else {
+               Log.printLine("Failed to add file with return value: " + myid);
+            }
+          } 
+        } catch (Exception e) {
+          e.printStackTrace();
         }
+	return time;
     }
 
     /*
@@ -231,27 +262,24 @@ public class WorkflowDatacenter extends Datacenter {
             //The input file is not an output File 
             if (file.isRealInputFile(requiredFiles)) {
                 double maxBwth = 0.0;
+		
                 List siteList = ReplicaCatalog.getStorageList(file.getName());
+		if (siteList == null)
+		  Log.printLine("siteList is null for file " + file.getName());
                 if (siteList.isEmpty()) {
                     throw new Exception(file.getName() + " does not exist");
                 }
-                switch (ReplicaCatalog.getFileSystem()) {
-                    case SHARED:
-                        //stage-in job
-                        /**
-                         * Picks up the site that is closest
-                         */
-                        double maxRate = Double.MIN_VALUE;
-                        for (Storage storage : getStorageList()) {
-                            double rate = storage.getMaxTransferRate();
-                            if (rate > maxRate) {
-                                maxRate = rate;
-                            }
-                        }
-                        //Storage storage = getStorageList().get(0);
-                        time += file.getSize() / (double) Consts.MILLION / maxRate;
-                        break;
-                    case LOCAL:
+		
+		int storageID = -1;
+		if (file.getName() != null) {
+         		storageID = mHybridStorage.locateFile(file.getName());
+		}
+
+		if (storageID == -1) {
+                  throw new Exception(file.getName() + " does not exist in hybrid storage");
+                }
+		
+		if ((storageID == 0) || (storageID == 1)) {
                         int vmId = job.getVmId();
                         int userId = job.getUserId();
                         Host host = getVmAllocationPolicy().getHost(vmId, userId);
@@ -259,47 +287,49 @@ public class WorkflowDatacenter extends Datacenter {
 
                         boolean requiredFileStagein = true;
                         for (Iterator it = siteList.iterator(); it.hasNext();) {
-                            //site is where one replica of this data is located at
+			    //site is where one replica of this data is located at
                             String site = (String) it.next();
                             if (site.equals(this.getName())) {
                                 continue;
                             }
-                            /**
-                             * This file is already in the local vm and thus it
-                             * is no need to transfer
-                             */
+			    //This file is already in the local vm and thus it is no need to transfer
                             if (site.equals(Integer.toString(vmId))) {
                                 requiredFileStagein = false;
+                                time += mHybridStorage.predictFileReadTime(file.getSize(), 1);
                                 break;
                             }
                             double bwth;
-                            if (site.equals(Parameters.SOURCE)) {
-                                //transfers from the source to the VM is limited to the VM bw only
-                                bwth = vm.getBw();
-                                //bwth = dcStorage.getBaseBandwidth();
-                            } else {
-                                //transfers between two VMs is limited to both VMs
-                                bwth = Math.min(vm.getBw(), getVmAllocationPolicy().getHost(Integer.parseInt(site), userId).getVm(Integer.parseInt(site), userId).getBw());
-                                //bwth = dcStorage.getBandwidth(Integer.parseInt(site), vmId);
-                            }
-                            if (bwth > maxBwth) {
+
+                           if (site.equals(Parameters.SOURCE)) {
+			     //transfers from the source to the VM is limited to the VM bw only
+                             bwth = vm.getBw();
+                           } else {
+                             //transfers between two VMs is limited to both VMs
+                             bwth = Math.min(vm.getBw(), getVmAllocationPolicy().getHost(Integer.parseInt(site), userId).getVm(Integer.parseInt(site), userId).getBw());
+                           }
+                           if (bwth > maxBwth) {
                                 maxBwth = bwth;
                             }
                         }
-                        if (requiredFileStagein && maxBwth > 0.0) {
-                            time += file.getSize() / (double) Consts.MILLION / maxBwth;
-                        }
+			ReplicaCatalog.addFileToStorage(file.getName(), Integer.toString(vmId));
 
-                        /**
-                         * For the case when storage is too small it is not
-                         * handled here
-                         */
-                        //We should add but since CondorVm has a small capability it often fails
-                        //We currently don't use this storage to do anything meaningful. It is left for future. 
-                        //condorVm.addLocalFile(file);
-                        ReplicaCatalog.addFileToStorage(file.getName(), Integer.toString(vmId));
-                        break;
+	                switch (storageID) {
+                      	      case 0:
+				if (requiredFileStagein && maxBwth > 0.0) {
+        	                        time += (mHybridStorage.predictFileReadTime(file.getSize(), 0) + file.getSize() / (double) Consts.MILLION / maxBwth);
+                	        }
+				break;
+			      case 1:
+				if (requiredFileStagein && maxBwth > 0.0) {
+                                time += (mHybridStorage.predictFileReadTime(file.getSize(), 1) + file.getSize() / (double) Consts.MILLION / maxBwth);
+	                        }
+				break;
+		  	}
+		} else if (storageID == 2) {
+			ReplicaCatalog.addFileToStorage(file.getName(), this.getName());
+			time += mHybridStorage.predictFileReadTime(file.getSize(), 2);
                 }
+		
             }
         }
         return time;
@@ -350,12 +380,34 @@ public class WorkflowDatacenter extends Datacenter {
                     Cloudlet cl = vm.getCloudletScheduler().getNextFinishedCloudlet();
                     if (cl != null) {
                         sendNow(cl.getUserId(), CloudSimTags.CLOUDLET_RETURN, cl);
-                        register(cl);
+                        //register(cl);
+                        mRegister(cl);
                     }
                 }
             }
         }
     }
+
+    /**
+     * Verifies if some cloudlet inside this PowerDatacenter already finished and return the file write time.
+     */
+    protected double mCheckCloudletCompletion() {
+        double time = 0.0;
+        List<? extends Host> list = getVmAllocationPolicy().getHostList();
+        for (Host host : list) {
+            for (Vm vm : host.getVmList()) {
+                while (vm.getCloudletScheduler().isFinishedCloudlets()) {
+                    Cloudlet cl = vm.getCloudletScheduler().getNextFinishedCloudlet();
+                    if (cl != null) {
+                        sendNow(cl.getUserId(), CloudSimTags.CLOUDLET_RETURN, cl);
+                        time += mRegister(cl);
+                    }
+                }
+            }
+        }
+	return time;
+    }
+
     /*
      * Register a file to the storage if it is an output file
      * @param requiredFiles, all files to be stage-in
@@ -368,7 +420,7 @@ public class WorkflowDatacenter extends Datacenter {
         Task tl = (Task) cl;
         List<FileItem> fList = tl.getFileList();
         for (FileItem file : fList) {
-            if (file.getType() == FileType.OUTPUT)//output file
+            if (file.getType() == FileType.OUTPUT)//output file*/
             {
                 switch (ReplicaCatalog.getFileSystem()) {
                     case SHARED:
@@ -388,4 +440,54 @@ public class WorkflowDatacenter extends Datacenter {
             }
         }
     }
+
+   /*
+    * Register a file to the storage if it is an output file and return the write time.
+    */
+   private double mRegister(Cloudlet cl) {
+        double time = 0.0;
+        Task tl = (Task) cl;
+        List<FileItem> fList = tl.getFileList();
+        for (FileItem file : fList) {
+            if (file.getType() == FileType.OUTPUT)//output file*/
+            {
+		int myid = -1;
+                try{
+                  int fsize = (int) file.getSize()/1024/1024;
+                  if (fsize == 0)
+                     fsize = 1;
+		  if (!mHybridStorage.contains(file.getName())) {
+                    myid = mHybridStorage.addFile(new File(file.getName(), fsize), mStorageStrategy[currentJobID]);
+		  }
+                  if (myid == 0 || myid == 1 || myid == 2) {
+		    //Log.printLine("addFile to storage once with id " + myid);
+                    mStorageStrategy[currentJobID] = myid;
+                    time = mHybridStorage.predictFileWriteTime(file.getSize(), myid);
+                  } 
+		  
+	  	  switch (myid) {
+                    case 0:
+                    case 1:
+                        int vmId = cl.getVmId();
+                        int userId = cl.getUserId();
+                        Host host = getVmAllocationPolicy().getHost(vmId, userId);
+                        CondorVM vm = (CondorVM) host.getVm(vmId, userId);
+                        ReplicaCatalog.addFileToStorage(file.getName(), Integer.toString(vmId));
+                        break;
+                    case 2:
+                        ReplicaCatalog.addFileToStorage(file.getName(), this.getName());
+                        break;
+                    default:
+                        //Log.printLine("Debug!!! Did not add file to ReplicaCatalog: " + file.getName() + "with rvalue " + myid);
+                        break;
+                   }
+
+                } catch (Exception e) {
+                  e.printStackTrace();
+                }
+            } 
+        }
+	return time;
+    }
+
 }

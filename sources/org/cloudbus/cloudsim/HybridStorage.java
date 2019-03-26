@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import org.cloudbus.cloudsim.Log;
 import org.cloudbus.cloudsim.HarddriveStorage;
 import org.cloudbus.cloudsim.distributions.ContinuousDistribution;
 
@@ -26,7 +27,7 @@ public class HybridStorage {
 
 
         /** the first storage system*/
-        private HarddriveStorage[] storageSystem;
+        private HarddriveStorage[] storageSystem = null;
 
 	/**
 	 * Creates a new hybrid storage.
@@ -51,8 +52,8 @@ public class HybridStorage {
                 /*Init Parallel file system, 1000000 MB*/
                 storageSystem[2] = new HarddriveStorage("Lustre", 1000000);
                 storageSystem[2].setMaxTransferRate(600);
-                storageSystem[2].setLatency(0.01);
-                storageSystem[2].setAvgSeekTime(0.01);
+                storageSystem[2].setLatency(0.1);
+                storageSystem[2].setAvgSeekTime(0.1);
 	}
 	
 
@@ -181,6 +182,24 @@ public class HybridStorage {
 		return storageSystem[i].getAvgSeekTime();
 	}
 
+        /**
+         * Locate the id of storage system that contains required file.
+         * @param fileName the name of the file we are looking for
+         *
+         * @return the id of storage system
+         */
+	public int locateFile(String fileName) {
+          int rvalue = -1;
+          for (int i = 0; i < 3; i++) {
+            if (storageSystem[i].contains(fileName)) {
+              rvalue = i;
+              break;
+            }
+          }
+	  return rvalue;
+        }
+
+
 	/**
 	 * Gets the file with the specified name. The time taken (in seconds) for getting the file can
 	 * also be found using {@link gridsim.datagrid.File#getTransactionTime()}.
@@ -213,22 +232,39 @@ public class HybridStorage {
 	 * @param i the id of storage system
 	 * @return the time taken (in seconds) for adding the specified file
 	 */
-	public double addFile(File file, int i) {
-		return storageSystem[i].addFile(file);
+	public int addFile(File file, int i) {
+		int rvalue = -1;
+		int id = i;
+		if (file == null) {
+			Log.printLine("Failed to add file in hybrid storage! FILE_ADD_ERROR_EMPTY");
+			return -1;
+		}
+
+		if (contains(file.getName())) {
+			//for (int j = 0; j < 3; j++)
+			//  storageSystem[j].deleteFile(file);
+			Log.printLine("Failed to add file in hybrid storage! FILE_ADD_ERROR_EXIST_READ_ONLY");
+                        return -1;
+		}
+
+		if ( storageSystem == null) {
+			Log.printLine("Failed to add file in hybrid storage! FILE_ADD_ERROR_STORAGE_FULL");
+                        return -1;
+		}
+
+                while (id < 3) {
+                  if (storageSystem[id].getAvailableSpace() >= file.getSize()) {
+                    storageSystem[id].addFile(file);
+                    rvalue = id;
+                    break;
+                  }
+		  id++;
+                }
+		//Log.printLine("Hybrid storage add file. return id is " + rvalue);
+		return rvalue;
 	}
 
-	/**
-	 * Adds a set of files to the storage. Runs through the list of files and save all of them. The
-	 * time taken (in seconds) for adding each file can also be found using
-	 * {@link gridsim.datagrid.File#getTransactionTime()}.
-	 * 
-	 * @param list the files to be added
-	 * @param i the id of storage system
-	 * @return the time taken (in seconds) for adding the specified files
-	 */
-	public double addFile(List<File> list, int i) {
-		return storageSystem[i].addFile(list);
-	}
+
 
 	/**
 	 * Removes a file from the storage. The time taken (in seconds) for deleting the file can also
@@ -265,6 +301,31 @@ public class HybridStorage {
                 result = storageSystem[0].contains(fileName) || storageSystem[1].contains(fileName) || storageSystem[2].contains(fileName);
 		return result;
 	}
+
+	/**
+	 * Predict file write time.
+	 ** 
+	 ** @param fisze the size of output file
+	 ** @param i the id of storage system
+	 ** @return the double
+	 **/
+	public double predictFileWriteTime(double fsize, int i) {
+            double time = 0.0;
+            time = storageSystem[i].getLatency() + fsize / (double) Consts.MILLION / storageSystem[i].getMaxTransferRate();
+	    return time;
+        }
+
+	/**
+	 * @param fisze the size of input file
+	 * @param i the id of storage system
+	 * @return the double
+         */
+        public double predictFileReadTime(double fsize, int i) {
+          double time = 0.0;
+          double maxBwth = storageSystem[i].getMaxTransferRate();
+          time = 2*storageSystem[i].getLatency() + fsize / (double) Consts.MILLION / maxBwth;
+	  return time;
+        }
 
 
 }

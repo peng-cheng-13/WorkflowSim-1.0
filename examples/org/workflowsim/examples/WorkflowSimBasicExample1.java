@@ -21,6 +21,8 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Date;
+import java.util.Random;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.CloudletSchedulerSpaceShared;
 import org.cloudbus.cloudsim.DatacenterCharacteristics;
@@ -39,8 +41,10 @@ import org.workflowsim.CondorVM;
 import org.workflowsim.Task;
 import org.workflowsim.WorkflowDatacenter;
 import org.workflowsim.Job;
+import org.workflowsim.FileItem;
 import org.workflowsim.WorkflowEngine;
 import org.workflowsim.WorkflowPlanner;
+import org.workflowsim.WorkflowParser;
 import org.workflowsim.utils.ClusteringParameters;
 import org.workflowsim.utils.OverheadParameters;
 import org.workflowsim.utils.Parameters;
@@ -97,7 +101,8 @@ public class WorkflowSimBasicExample1 {
             /**
              * Should change this based on real physical path
              */
-            String daxPath = "/Users/weiweich/NetBeansProjects/WorkflowSim-1.0/config/dax/Montage_100.xml";
+            //String daxPath = "/Users/weiweich/NetBeansProjects/WorkflowSim-1.0/config/dax/Montage_100.xml";
+            String daxPath = args[0];
             File daxFile = new File(daxPath);
             if (!daxFile.exists()) {
                 Log.printLine("Warning: Please replace daxPath with the physical path in your working environment!");
@@ -112,6 +117,7 @@ public class WorkflowSimBasicExample1 {
             Parameters.SchedulingAlgorithm sch_method = Parameters.SchedulingAlgorithm.MINMIN;
             Parameters.PlanningAlgorithm pln_method = Parameters.PlanningAlgorithm.INVALID;
             ReplicaCatalog.FileSystem file_system = ReplicaCatalog.FileSystem.SHARED;
+            //ReplicaCatalog.FileSystem file_system = ReplicaCatalog.FileSystem.LOCAL;
 
             /**
              * No overheads
@@ -137,10 +143,30 @@ public class WorkflowSimBasicExample1 {
             Calendar calendar = Calendar.getInstance();
             boolean trace_flag = false;  // mean trace events
 
+            /*Init a tmp parser to get the number of Jobs*/
+            WorkflowParser tmpParser = new WorkflowParser(999);
+            tmpParser.parse();
+            int jobnum = tmpParser.getTaskList().size();
+            Log.printLine("Num of jobs is " + jobnum);
+            
+
             // Initialize the CloudSim library
             CloudSim.init(num_user, calendar, trace_flag);
 
             WorkflowDatacenter datacenter0 = createDatacenter("Datacenter_0");
+
+            /*Init hybrid storage for datacenter0*/
+            datacenter0.setHybridStorage();
+            /*Init storage strategy*/
+            Date date = new Date();
+            long timeMill = date.getTime();
+            Random rand = new Random(timeMill);
+            int[] storageStrategy = new int[jobnum];
+            for (int i = 0; i < jobnum; i++) {
+              storageStrategy[i] = rand.nextInt(3);
+              //System.out.print(storageStrategy[i]);
+            }
+            datacenter0.setStorageStrategy(storageStrategy);
 
             /**
              * Create a WorkflowPlanner with one schedulers.
@@ -254,7 +280,7 @@ public class WorkflowSimBasicExample1 {
         Log.printLine("========== OUTPUT ==========");
         Log.printLine("Job ID" + indent + "Task ID" + indent + "STATUS" + indent
                 + "Data center ID" + indent + "VM ID" + indent + indent
-                + "Time" + indent + "Start Time" + indent + "Finish Time" + indent + "Depth");
+                + "Time" + indent + "Start Time" + indent + "Finish Time" + indent + "Depth" + indent + "IputFileSize (MB)" );
         DecimalFormat dft = new DecimalFormat("###.##");
         for (Job job : list) {
             Log.print(indent + job.getCloudletId() + indent + indent);
@@ -266,12 +292,19 @@ public class WorkflowSimBasicExample1 {
             }
             Log.print(indent);
 
+           /*Get input file size for each job*/
+           double fileSize = 0;
+           List<FileItem> fList = job.getFileList();
+           for (FileItem file : fList) {
+             fileSize += file.getSize() / 1024 / 1024;
+           }
+
             if (job.getCloudletStatus() == Cloudlet.SUCCESS) {
                 Log.print("SUCCESS");
                 Log.printLine(indent + indent + job.getResourceId() + indent + indent + indent + job.getVmId()
                         + indent + indent + indent + dft.format(job.getActualCPUTime())
                         + indent + indent + dft.format(job.getExecStartTime()) + indent + indent + indent
-                        + dft.format(job.getFinishTime()) + indent + indent + indent + job.getDepth());
+                        + dft.format(job.getFinishTime()) + indent + indent + indent + job.getDepth() + indent + fileSize);
             } else if (job.getCloudletStatus() == Cloudlet.FAILED) {
                 Log.print("FAILED");
                 Log.printLine(indent + indent + job.getResourceId() + indent + indent + indent + job.getVmId()
