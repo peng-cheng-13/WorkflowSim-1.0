@@ -78,6 +78,10 @@ public class WorkflowDatacenter extends Datacenter {
       mStorageStrategy = strategy;
     }
 
+    public int[] getStorageStrategy() {
+      return mStorageStrategy;
+    }
+
     /**
      * Processes a Cloudlet submission. The cloudlet is actually a job which can
      * be cast to org.workflowsim.Job
@@ -295,9 +299,10 @@ public class WorkflowDatacenter extends Datacenter {
 			    //This file is already in the local vm and thus it is no need to transfer
                             if (site.equals(Integer.toString(vmId))) {
                                 requiredFileStagein = false;
-                                time += mHybridStorage.predictFileReadTime(file.getSize(), 1);
+                                time += mHybridStorage.predictFileReadTime(file.getSize(), storageID);
                                 break;
                             }
+			    
                             double bwth;
 
                            if (site.equals(Parameters.SOURCE)) {
@@ -312,19 +317,15 @@ public class WorkflowDatacenter extends Datacenter {
                             }
                         }
 			ReplicaCatalog.addFileToStorage(file.getName(), Integer.toString(vmId));
-
-	                switch (storageID) {
-                      	      case 0:
-				if (requiredFileStagein && maxBwth > 0.0) {
-        	                        time += (mHybridStorage.predictFileReadTime(file.getSize(), 0) + file.getSize() / (double) Consts.MILLION / maxBwth);
-                	        }
-				break;
-			      case 1:
-				if (requiredFileStagein && maxBwth > 0.0) {
-                                time += (mHybridStorage.predictFileReadTime(file.getSize(), 1) + file.getSize() / (double) Consts.MILLION / maxBwth);
-	                        }
-				break;
-		  	}
+			
+			if (requiredFileStagein) {
+				if (mHybridStorage.getMaxTransferRate(storageID) > maxBwth) {
+					time += file.getSize() / (double) Consts.MILLION / maxBwth;
+				}
+				else {
+					time += mHybridStorage.predictFileReadTime(file.getSize(), storageID);
+				}
+			}
 		} else if (storageID == 2) {
 			ReplicaCatalog.addFileToStorage(file.getName(), this.getName());
 			time += mHybridStorage.predictFileReadTime(file.getSize(), 2);

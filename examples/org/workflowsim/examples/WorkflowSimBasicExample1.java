@@ -195,6 +195,13 @@ public class WorkflowSimBasicExample1 {
             List<Job> outputList0 = wfEngine.getJobsReceivedList();
             CloudSim.stopSimulation();
             printJobList(outputList0);
+	    storageStrategy = datacenter0.getStorageStrategy();
+	    for (int i = 0; i < jobnum; i++) {
+              System.out.printf("%d ",storageStrategy[i]);
+	      if ((i != 0) && (i % 60 == 0))
+		System.out.printf("\n");
+            }
+	    System.out.printf("\n");
         } catch (Exception e) {
             Log.printLine("The simulation has been terminated due to an unexpected error");
         }
@@ -275,6 +282,7 @@ public class WorkflowSimBasicExample1 {
      * @param list list of jobs
      */
     protected static void printJobList(List<Job> list) {
+	double totalTime = 0.0;
         String indent = "    ";
         Log.printLine();
         Log.printLine("========== OUTPUT ==========");
@@ -301,6 +309,7 @@ public class WorkflowSimBasicExample1 {
 
             if (job.getCloudletStatus() == Cloudlet.SUCCESS) {
                 Log.print("SUCCESS");
+		totalTime += job.getActualCPUTime();
                 Log.printLine(indent + indent + job.getResourceId() + indent + indent + indent + job.getVmId()
                         + indent + indent + indent + dft.format(job.getActualCPUTime())
                         + indent + indent + dft.format(job.getExecStartTime()) + indent + indent + indent
@@ -313,5 +322,6 @@ public class WorkflowSimBasicExample1 {
                         + dft.format(job.getFinishTime()) + indent + indent + indent + job.getDepth());
             }
         }
+	Log.printLine("Workflow elapsed time is " + totalTime + " s.");
     }
 }

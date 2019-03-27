@@ -39,13 +39,13 @@ public class HybridStorage {
 		storageSystem = new HarddriveStorage[3];
                 /*Init In-memory file system, 10000 MB*/
                 storageSystem[0] = new HarddriveStorage("Ramdisk", 10000);
-                storageSystem[0].setMaxTransferRate(1200);
+                storageSystem[0].setMaxTransferRate(1400);
                 storageSystem[0].setLatency(0);
                 storageSystem[0].setAvgSeekTime(0);
 
                 /*Init Local file system, 20000 MB*/
                 storageSystem[1] = new HarddriveStorage("LocalFS", 20000);
-                storageSystem[1].setMaxTransferRate(800);
+                storageSystem[1].setMaxTransferRate(1000);
                 storageSystem[1].setLatency(0.0001);
                 storageSystem[1].setAvgSeekTime(0.0001);
 
