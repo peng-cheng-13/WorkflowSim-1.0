@@ -1,0 +1,2 @@
+javac GeneticAlgorithm.java Chromosome.java
+javac -d . GeneticAlgorithmTest.java -cp /BIGDATA/nsccgz_pcheng_1/src/WorkflowSim-1.0/dist/lib/WorkflowSim.jar:.

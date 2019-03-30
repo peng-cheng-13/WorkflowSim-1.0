@@ -71,7 +71,7 @@ public class WorkflowSimBasicExample1 {
         int ram = 512; //vm memory (MB)
         int mips = 1000;
         long bw = 1000;
-        int pesNumber = 1; //number of cpus
+        int pesNumber = 4; //number of cpus
         String vmm = "Xen"; //VMM name
 
         //create VMs
@@ -148,6 +148,7 @@ public class WorkflowSimBasicExample1 {
             tmpParser.parse();
             int jobnum = tmpParser.getTaskList().size();
             Log.printLine("Num of jobs is " + jobnum);
+	    Log.printLine("Type of 3th job is " + tmpParser.getTaskList().get(3).getType());
             
 
             // Initialize the CloudSim library
