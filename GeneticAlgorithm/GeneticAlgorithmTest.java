@@ -35,12 +35,15 @@ import org.workflowsim.utils.OverheadParameters;
 import org.workflowsim.utils.Parameters;
 import org.workflowsim.utils.ReplicaCatalog;
 import org.workflowsim.utils.Parameters.ClassType;
+import org.workflowsim.utils.Parameters.FileType;
 
 
 public class GeneticAlgorithmTest extends GeneticAlgorithm {
 	public static int jobNum;
  	public static String daxPath;
 	public static HashMap<String, Integer> taskType;
+	public static HashMap<String, Integer> perTaskFiles;
+	public static HashMap<String, String> files2Task;
 	
 
 	public GeneticAlgorithmTest(int num) {
@@ -61,8 +64,9 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 
 	public static void main(String[] args) {
 		daxPath = args[0];
-	        int jobTypeNum = initSimulator();
-		GeneticAlgorithmTest test = new GeneticAlgorithmTest(jobTypeNum);
+	        int fileTypeNum = initSimulator();
+		System.out.printf("Num of file is %d\n", fileTypeNum);
+		GeneticAlgorithmTest test = new GeneticAlgorithmTest(fileTypeNum);
 		test.caculte();
 	}
 
@@ -112,21 +116,28 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
             CloudSim.init(num_user, calendar, trace_flag);
             WorkflowDatacenter datacenter0 = createDatacenter("Datacenter_0");
             datacenter0.setHybridStorage();
+
             /*Set storageStrategy for jobs. Jobs has the same type shares the same storage strategy*/
-            int[] perTaskstorage = new int[jobNum];
+            HashMap<String, List<Integer>> perTaskstorage = new HashMap<String, List<Integer>>();
 	    int tmpnum = 0;
 	    int currentTaskType = 0;
 	    int pointer = 0;
-	    Iterator<Integer> iterator = taskType.values().iterator();
+	    int tmpfiles = 0;
+	    List<Integer> tmpTaskStorage = new ArrayList<>();
+	    Iterator<String> iterator = perTaskFiles.keySet().iterator();
+	    String tmpTask = null;
 	    while (iterator.hasNext()) {
-              tmpnum = iterator.next();
-	      for (int j = 0; j < tmpnum; j++) {
-                perTaskstorage[pointer] = storageStrategy[currentTaskType];
-	        pointer++;
-	      }
-	      currentTaskType++;
+		tmpTaskStorage  = new ArrayList<>();
+		tmpTask = iterator.next();
+		tmpfiles = perTaskFiles.get(tmpTask);
+		for (int j = 0; j < tmpfiles; j++) {
+                  tmpTaskStorage.add(storageStrategy[currentTaskType]);
+                  currentTaskType++;
+                }
+		perTaskstorage.put(tmpTask, tmpTaskStorage);
 	    }
             datacenter0.setStorageStrategy(perTaskstorage);
+	    datacenter0.setFilesToTask(files2Task);
 
 	    /*Ready to simulate*/
             WorkflowPlanner wfPlanner = new WorkflowPlanner("planner_0", 1);
@@ -142,18 +153,18 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 		  totalTime += job.getActualCPUTime();
 		}
 	    }
+
 	    /*
             printJobList(outputList0);
 	    */
-            int[] finalStorageStrategy = datacenter0.getStorageStrategy();
-	    
-            for (int i = 0; i < jobNum; i++) {
-              System.out.printf("%d ",finalStorageStrategy[i]);
-              if ((i != 0) && (i % 60 == 0))
-                System.out.printf("\n");
-            }
-            System.out.printf("\n");
-	    
+
+            HashMap<String, List<Integer>> finalStorageStrategy = datacenter0.getStorageStrategy();
+	    //System.out.printf("Debug!!! jobNum is %d\n", jobNum);
+	    iterator = finalStorageStrategy.keySet().iterator();
+	    while (iterator.hasNext()) {
+		String mytask = iterator.next();
+		System.out.printf("perJobStrategy of job %s is %d\n", mytask, finalStorageStrategy.get(mytask).size());
+	    }
         }catch (Exception e) {
             Log.printLine("The simulation has been terminated due to an unexpected error");
         }
@@ -275,23 +286,61 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
             int num_user = 1;
             Calendar calendar = Calendar.getInstance();
             boolean trace_flag = false;
-            WorkflowParser tmpParser = new WorkflowParser(999);
+	    WorkflowParser tmpParser = new WorkflowParser(999);
             tmpParser.parse();
 	    List<Task> mtask = tmpParser.getTaskList();
             jobNum = mtask.size();
 	    taskType = new HashMap<>();
+	    perTaskFiles = new HashMap<>();
+	    files2Task = new HashMap<>();
+	    files2Task = new HashMap<>();
 	    String tmpType= null;
 	    int typeNum = 0;
+	    int outputFileNum = 0;
+	    /* Each task contains multiple storage strtegies, and each output file of that task maps to one storage strtegy.
+	     * Num of total storage strtegies = taskType0*NumofOutputFiles + taskType1*NumofOutputFiles + ... + taskTypeN*NumofOutputFiles
+	     * */
+	    int perFileStrategies = 0;
 	    for (int tid = 0; tid < mtask.size(); tid++) {
 		tmpType = mtask.get(tid).getType();
+
+		/*num of tasks of each type*/
 		if (taskType.containsKey(tmpType)) {
 		  typeNum = taskType.get(tmpType) + 1;
 		  taskType.put(tmpType, typeNum);
 		} else {
 		  taskType.put(tmpType, 1);
 		}
+
+		/*num of output files of each task*/
+	        outputFileNum = 0;
+		if (!perTaskFiles.containsKey(tmpType)) {
+		  List<FileItem> fList = mtask.get(tid).getFileList();
+		  for (FileItem file : fList) {
+	            if (file.getType() == FileType.OUTPUT){
+			outputFileNum++;
+		    }
+		  }
+		  perTaskFiles.put(tmpType, outputFileNum);
+		  /*System.out.printf("Debug!!! Task %s has %d output files\n", tmpType, outputFileNum);*/
+		  if (outputFileNum != 0) {
+		    perFileStrategies += outputFileNum;
+		  } else {
+		    /*At least one storage strtegy for each task*/
+		    perFileStrategies += 1;
+		  }
+		}
+
+		/*relation between task and files*/
+		List<FileItem> fList2 = mtask.get(tid).getFileList();
+		String taskFiles = "";
+		for (FileItem file : fList2) {
+		  taskFiles += file.getName();
+		}
+		files2Task.put(taskFiles, tmpType);
+		//System.out.println("Debug!!! Files of task " + tmpType + " is " + taskFiles);
 	    }
-	    return taskType.size();
+	    return perFileStrategies;
     }
 
 }

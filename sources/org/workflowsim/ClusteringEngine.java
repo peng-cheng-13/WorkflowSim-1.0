@@ -191,6 +191,7 @@ public final class ClusteringEngine extends SimEntity {
          * All the files of this workflow, it is saved in the workflow engine
          */
         List<FileItem> list = this.engine.getTaskFiles();
+	
         /**
          * A bug of cloudsim, you cannot set the length of a cloudlet to be
          * smaller than 110 otherwise it will fail The reason why we set the id
@@ -216,6 +217,17 @@ public final class ClusteringEngine extends SimEntity {
         }
         job.setFileList(fileList);
         job.setClassType(ClassType.STAGE_IN.value);
+
+	/*Set type for the job*/
+	if (this.engine.getJobList().size() != 0) {
+	  int tmpid = getJobList().size();
+	  String tmptype = this.engine.getJobList().get(0).getTaskList().get(0).getType();
+	  //String tmptype = this.engine.getJobList().get(tmpid).getTaskList().get(0).getType();
+	  job.setType(tmptype);
+	  Log.printLine("Debug!!! Cluster engine set type " + tmptype + " for the job");
+	} else {
+	  Log.printLine("Debug!!! Cluster engine did not set type");
+	}
 
         /**
          * stage-in is always first level job

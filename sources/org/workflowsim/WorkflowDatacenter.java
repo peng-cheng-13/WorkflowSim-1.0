@@ -17,6 +17,7 @@ package org.workflowsim;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.HashMap;
 
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.CloudletScheduler;
@@ -49,8 +50,10 @@ import org.workflowsim.utils.Parameters.FileType;
 public class WorkflowDatacenter extends Datacenter {
 
     private HybridStorage mHybridStorage = null;
-    private int[] mStorageStrategy = null;
+    private HashMap<String, List<Integer>> mStorageStrategy = null;
+    private HashMap<String, String> mFiles2Task = null;
     private int currentJobID = 0;
+    private String mtaskType = null;
 
     public WorkflowDatacenter(String name,
             DatacenterCharacteristics characteristics,
@@ -74,12 +77,20 @@ public class WorkflowDatacenter extends Datacenter {
     /**
      * Init storage strategy.
      */
-    public void setStorageStrategy(int[] strategy) {
+    public void setStorageStrategy(HashMap<String, List<Integer>> strategy) {
       mStorageStrategy = strategy;
     }
 
-    public int[] getStorageStrategy() {
+
+    public HashMap<String, List<Integer>> getStorageStrategy() {
       return mStorageStrategy;
+    }
+
+    /**
+     * Init the relation betwen files and task.
+     */
+    public void setFilesToTask(HashMap<String, String> relations) {
+      mFiles2Task = relations;
     }
 
     /**
@@ -147,15 +158,19 @@ public class WorkflowDatacenter extends Datacenter {
                     break;
             }
 	    currentJobID = job.getCloudletId() - 1;
+
 	    if (currentJobID < 0)
               currentJobID = 0;
             double fileTransferTime = 0.0;
 
+	    /*Tips: current task type is not equal to the task type in checkCloudletCompletion() operation*/
+	    if (job.getTaskList().size() != 0)
+	      mtaskType = job.getTaskList().get(0).getType();
             /**
              * Stage-in file && Shared based on the file.system
              */
             if (job.getClassType() == ClassType.STAGE_IN.value) {
-                Log.printLine("Job " + currentJobID + " is STAGE_IN job");
+		Log.printLine("Job " + currentJobID + ", "+ mtaskType + " is STAGE_IN job");
                 fileTransferTime += stageInFile2FileSystem(job);
             }
 
@@ -165,7 +180,7 @@ public class WorkflowDatacenter extends Datacenter {
 
             if (job.getClassType() == ClassType.COMPUTE.value) {
                 fileTransferTime += processDataStageInForComputeJob(job.getFileList(), job);
-                Log.printLine("Job ID: " + job.getCloudletId() + " file transferTime is " + fileTransferTime);
+                //Log.printLine("Job ID: " + job.getCloudletId() + " file transferTime is " + fileTransferTime);
             }
 
             CloudletScheduler scheduler = vm.getCloudletScheduler();
@@ -226,6 +241,7 @@ public class WorkflowDatacenter extends Datacenter {
     private double stageInFile2FileSystem(Job job) {
         double time = 0.0;
         List<FileItem> fList = job.getFileList();
+	int fileid = 0;
         try {
           for (FileItem file : fList) {
             ReplicaCatalog.addFileToStorage(file.getName(), this.getName());
@@ -234,18 +250,19 @@ public class WorkflowDatacenter extends Datacenter {
 	    if (fsize == 0)
 		fsize = 1;
             if (!mHybridStorage.contains(file.getName())) {
-                  myid = mHybridStorage.addFile(new File(file.getName(), fsize), mStorageStrategy[currentJobID]);
-		   Log.printLine("Debug!!! Stage in file " + file.getName());
+		  /*All files of stage_in job are storaed in PFS*/
+		  myid = mHybridStorage.addFile(new File(file.getName(), fsize), 2);
+		  //Log.printLine("Debug!!! Stage in file " + file.getName());
             } else {
                   Log.printLine("Hybrid storage has contained file " + file.getName() + ", do not add again");
             }
             if (myid != -1) {
               //Log.printLine("addFile to storage once");
-              mStorageStrategy[currentJobID] = myid;
               time += mHybridStorage.predictFileWriteTime(file.getSize(), myid);
             } else {
                Log.printLine("Failed to add file with return value: " + myid);
             }
+	    fileid++;
           } 
         } catch (Exception e) {
           e.printStackTrace();
@@ -268,8 +285,10 @@ public class WorkflowDatacenter extends Datacenter {
                 double maxBwth = 0.0;
 		
                 List siteList = ReplicaCatalog.getStorageList(file.getName());
-		if (siteList == null)
+		if (siteList == null) {
 		  Log.printLine("siteList is null for file " + file.getName());
+		  System.exit(-1);
+		}
                 if (siteList.isEmpty()) {
                     throw new Exception(file.getName() + " does not exist");
                 }
@@ -392,7 +411,7 @@ public class WorkflowDatacenter extends Datacenter {
     /**
      * Verifies if some cloudlet inside this PowerDatacenter already finished and return the file write time.
      */
-    protected double mCheckCloudletCompletion() {
+    protected double mCheckCloudletCompletion(String tasktype) {
         double time = 0.0;
         List<? extends Host> list = getVmAllocationPolicy().getHostList();
         for (Host host : list) {
@@ -449,6 +468,19 @@ public class WorkflowDatacenter extends Datacenter {
         double time = 0.0;
         Task tl = (Task) cl;
         List<FileItem> fList = tl.getFileList();
+	int fileid = 0;
+
+	/*Not able to get task type info from Cloudlet*/
+	//String tasktype = tl.getType();
+	String myfiles = "";
+	for (FileItem file : fList) {
+	    myfiles += file.getName();
+	}
+	String tasktype = mFiles2Task.get(myfiles);
+
+	//System.out.println("Debug!!! Current task type is " + tasktype);
+	
+
         for (FileItem file : fList) {
             if (file.getType() == FileType.OUTPUT)//output file*/
             {
@@ -458,11 +490,19 @@ public class WorkflowDatacenter extends Datacenter {
                   if (fsize == 0)
                      fsize = 1;
 		  if (!mHybridStorage.contains(file.getName())) {
-                    myid = mHybridStorage.addFile(new File(file.getName(), fsize), mStorageStrategy[currentJobID]);
+		    if (tasktype == null) {
+			myid = mHybridStorage.addFile(new File(file.getName(), fsize), 2);
+		    } else {
+			//System.out.println("Debug!!! get " + fileid + " th file for task " + tasktype + ", file is " + file.getName());
+                        myid = mHybridStorage.addFile(new File(file.getName(), fsize), mStorageStrategy.get(tasktype).get(fileid));
+			//System.out.println("Debug!!! get " + fileid + " th file for task " + mtaskType + ", file is " + file.getName());
+		    }
 		  }
                   if (myid == 0 || myid == 1 || myid == 2) {
 		    //Log.printLine("addFile to storage once with id " + myid);
-                    mStorageStrategy[currentJobID] = myid;
+		    if (tasktype != null) {
+                        mStorageStrategy.get(tasktype).set(fileid,myid);
+		    }
                     time = mHybridStorage.predictFileWriteTime(file.getSize(), myid);
                   } 
 		  
@@ -486,6 +526,7 @@ public class WorkflowDatacenter extends Datacenter {
                 } catch (Exception e) {
                   e.printStackTrace();
                 }
+	        fileid++;
             } 
         }
 	return time;
