@@ -5,7 +5,7 @@ public abstract class GeneticAlgorithm {
 	private List<Chromosome> population = new ArrayList<Chromosome>();
 	private int popSize = 200;
 	private int geneSize;
-	private int maxIterNum = 300;
+	private int maxIterNum = 3;
 	private double mutationRate = 0.1;
 	private int maxMutationNum = 20;
 	private int generation = 1;
@@ -29,6 +29,10 @@ public abstract class GeneticAlgorithm {
 			print();
 			generation++;
 		}
+	}
+
+	public int[] bestX() {
+	  return x;
 	}
 
 	private void print() {

@@ -1,4 +1,5 @@
 import java.io.File;
+import java.io.RandomAccessFile;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -58,7 +59,7 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 
 	@Override
 	public double caculateY(int[] x) {
-		double rvalue =  1000 - Math.log(WorkfowSimulator(x));
+		double rvalue =  1000 - Math.log(WorkfowSimulator(x, false));
 		return rvalue;
 	}
 
@@ -68,6 +69,8 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 		System.out.printf("Num of file is %d\n", fileTypeNum);
 		GeneticAlgorithmTest test = new GeneticAlgorithmTest(fileTypeNum);
 		test.caculte();
+		int[] storageStrategy = test.bestX();
+		WorkfowSimulator(storageStrategy, true);
 	}
 
 
@@ -90,7 +93,7 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
         return list;
   }
 
-  public static double WorkfowSimulator(int[] storageStrategy) {
+  public static double WorkfowSimulator(int[] storageStrategy, boolean printLog) {
 	double totalTime = 0.0;
 	try {
             int vmNum = 20;//number of vms;
@@ -153,11 +156,13 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 		  totalTime += job.getActualCPUTime();
 		}
 	    }
+	    /*Print the final storage strategy of each task*/
+	    if (printLog) {
+		HashMap<String, List<Integer>> finalStorageStrategy = datacenter0.getStorageStrategy();
+                printJobList(outputList0, finalStorageStrategy);
+	    }
 
 	    /*
-            printJobList(outputList0);
-	    */
-
             HashMap<String, List<Integer>> finalStorageStrategy = datacenter0.getStorageStrategy();
 	    //System.out.printf("Debug!!! jobNum is %d\n", jobNum);
 	    iterator = finalStorageStrategy.keySet().iterator();
@@ -165,6 +170,7 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 		String mytask = iterator.next();
 		System.out.printf("perJobStrategy of job %s is %d\n", mytask, finalStorageStrategy.get(mytask).size());
 	    }
+	    */
         }catch (Exception e) {
             Log.printLine("The simulation has been terminated due to an unexpected error");
         }
@@ -222,10 +228,53 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
         return datacenter;
     }
 
-    protected static void printJobList(List<Job> list) {
+    protected static void printJobList(List<Job> list, HashMap<String, List<Integer>> finalStorageStrategy) {
+      try{
         double totalTime = 0.0;
+	HashMap<String, Integer> traveredFiles = new HashMap<>();
         String indent = "    ";
         Log.printLine();
+	Log.printLine("========== OUTPUT ==========");
+	Log.printLine("taskName" + indent + "taskNum" + indent + "parentNum" + indent + "childNum" + indent
+			 + "depth" + "fileName" + indent + "fsize" + indent + "storageTier");
+	File outfile=new File("testlog.tsv");
+	RandomAccessFile raf=new RandomAccessFile(outfile, "rw");
+	raf.seek(raf.length());
+	for (Job job : list) {
+	    if (job.getCloudletStatus() == Cloudlet.FAILED) {
+		break;
+	    }
+	    for (Task task : job.getTaskList()) {
+		String taskName =  task.getType();
+		if (traveredFiles.containsKey(taskName)) {
+		  break;
+		} else {
+		  traveredFiles.put(taskName, 1);
+		}
+		int parentNum = task.getParentList().size();
+		int childNum = task.getChildList().size();
+		int taskNum =  taskType.get(taskName);
+		int depth = task.getDepth();
+		List<Integer> perFileStorage = finalStorageStrategy.get(taskName);
+		if (perFileStorage == null) {
+		    break;
+		}
+		int fileid = 0;
+		for (FileItem file : task.getFileList()) {
+		    if (file.getType() == FileType.OUTPUT) {
+			String fileName = file.getName();
+			double fsize = file.getSize();
+			int storageTier = perFileStorage.get(fileid);
+			fileid++;
+			//System.out.printf("%s\t%d\t%d\t%d\t%d\t%s\t%d\t%d\n",taskName, taskNum, parentNum, childNum, depth, fileName, fsize, storageTier);
+			String sOutput = String.format("%s\t%d\t%d\t%d\t%d\t%s\t%f\t%d\n",taskName, taskNum, parentNum, childNum, depth, fileName, fsize, storageTier);
+			raf.writeBytes(sOutput);
+		    }
+		}
+	    }
+	}
+	raf.close();
+	/*
         Log.printLine("========== OUTPUT ==========");
         Log.printLine("Job ID" + indent + "Task ID" + indent + "STATUS" + indent
                 + "Data center ID" + indent + "VM ID" + indent + indent
@@ -264,6 +313,11 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
             }
         }
         Log.printLine("Workflow elapsed time is " + totalTime + " s.");
+	*/
+	Log.printLine("Append output to file ./testlog.tsv");
+      } catch (Exception e) {
+	e.printStackTrace();
+      }
     }
 
     public static int initSimulator() {
