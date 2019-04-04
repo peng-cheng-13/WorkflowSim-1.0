@@ -18,11 +18,15 @@ package org.workflowsim.examples;
 import java.io.File;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Date;
 import java.util.Random;
+import java.util.Iterator;
+import java.io.BufferedReader;
+import java.io.FileReader;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.CloudletSchedulerSpaceShared;
 import org.cloudbus.cloudsim.DatacenterCharacteristics;
@@ -50,6 +54,7 @@ import org.workflowsim.utils.OverheadParameters;
 import org.workflowsim.utils.Parameters;
 import org.workflowsim.utils.ReplicaCatalog;
 import org.workflowsim.utils.Parameters.ClassType;
+import org.workflowsim.utils.Parameters.FileType;
 
 /**
  * This WorkflowSimExample creates a workflow planner, a workflow engine, and
@@ -61,6 +66,11 @@ import org.workflowsim.utils.Parameters.ClassType;
  * @date Apr 9, 2013
  */
 public class WorkflowSimBasicExample1 {
+
+    public static String daxPath;
+    public static HashMap<String, Integer> taskType;
+    public static HashMap<String, Integer> perTaskFiles;
+    public static HashMap<String, String> files2Task;
 
     protected static List<CondorVM> createVM(int userId, int vms) {
         //Creates a container to store VMs. This list is passed to the broker later
@@ -101,8 +111,16 @@ public class WorkflowSimBasicExample1 {
             /**
              * Should change this based on real physical path
              */
-            //String daxPath = "/Users/weiweich/NetBeansProjects/WorkflowSim-1.0/config/dax/Montage_100.xml";
-            String daxPath = args[0];
+
+	    boolean hasInputStorage = false;
+            daxPath = args[0];
+	    if (args.length == 2) {
+		System.out.println("arg1 is " + args[1]);
+		String inputStorageFile = args[1];
+		File storageFile = new File(inputStorageFile);
+		if (storageFile.exists())
+		    hasInputStorage = true;
+	    }
             File daxFile = new File(daxPath);
             if (!daxFile.exists()) {
                 Log.printLine("Warning: Please replace daxPath with the physical path in your working environment!");
@@ -146,9 +164,9 @@ public class WorkflowSimBasicExample1 {
             /*Init a tmp parser to get the number of Jobs*/
             WorkflowParser tmpParser = new WorkflowParser(999);
             tmpParser.parse();
-            int jobnum = tmpParser.getTaskList().size();
-            Log.printLine("Num of jobs is " + jobnum);
-	    Log.printLine("Type of 3th job is " + tmpParser.getTaskList().get(3).getType());
+	    List<Task> mtask = tmpParser.getTaskList();
+            int jobnum = initSimulator();
+            Log.printLine("Num of output file type is " + jobnum);
             
 
             // Initialize the CloudSim library
@@ -158,16 +176,68 @@ public class WorkflowSimBasicExample1 {
 
             /*Init hybrid storage for datacenter0*/
             datacenter0.setHybridStorage();
-            /*Init storage strategy*/
+
+            /**
+ 	     * Init storage strategy.
+ 	     **/
+
+	    /*Parse storage strategy from prediction file if specified*/
+	    int[] storageStrategy = new int[jobnum];
+	    if (args.length == 2) {
+                System.out.println("arg1 is " + args[1]);
+                String inputStorageFile = args[1];
+                File storageFile = new File(inputStorageFile);
+                if (storageFile.exists()) {
+                    hasInputStorage = true;
+		    BufferedReader br = new BufferedReader(new FileReader(storageFile));
+		    String line = null;
+		    /*Leave the first line*/
+		    line=br.readLine();
+		    int index = 0;
+		    while ((line=br.readLine())!=null) {
+			String[] segments = line.split("\t");
+			/*Parse the last value of each line*/
+			int id = segments.length - 1;
+			storageStrategy[index] = Integer.parseInt(segments[id]);
+			index++;
+		    }
+		}
+            }
+	    if (hasInputStorage) {
+		System.out.printf("Storage strategy is: ");
+		for (int k = 0; k < storageStrategy.length; k++) 
+	   	    System.out.printf("%d ", storageStrategy[k]);
+	    }
+
             Date date = new Date();
             long timeMill = date.getTime();
             Random rand = new Random(timeMill);
-            int[] storageStrategy = new int[jobnum];
-            for (int i = 0; i < jobnum; i++) {
-              storageStrategy[i] = rand.nextInt(3);
-              //System.out.print(storageStrategy[i]);
+	    HashMap<String, List<Integer>> perTaskstorage = new HashMap<String, List<Integer>>();
+	    int tmpnum = 0;
+            int pointer = 0;
+            int tmpfiles = 0;
+	    int currentTaskType = 0;
+	    List<Integer> tmpTaskStorage = new ArrayList<>();
+            Iterator<String> iterator = perTaskFiles.keySet().iterator();
+            String tmpTask = null;
+            while (iterator.hasNext()) {
+                tmpTaskStorage  = new ArrayList<>();
+                tmpTask = iterator.next();
+                tmpfiles = perTaskFiles.get(tmpTask);
+                for (int j = 0; j < tmpfiles; j++) {
+		  /*Using the predicted storage strategy if exists, else generating storage strategy randomly*/
+		  if (hasInputStorage) {
+		    tmpTaskStorage.add(storageStrategy[currentTaskType]);
+		    currentTaskType++;
+		  }
+		  else {
+                    tmpTaskStorage.add(rand.nextInt(3));
+		  }
+                }
+                perTaskstorage.put(tmpTask, tmpTaskStorage);
             }
-            datacenter0.setStorageStrategy(storageStrategy);
+	    datacenter0.setStorageStrategy(perTaskstorage);
+            datacenter0.setFilesToTask(files2Task);
 
             /**
              * Create a WorkflowPlanner with one schedulers.
@@ -196,12 +266,6 @@ public class WorkflowSimBasicExample1 {
             List<Job> outputList0 = wfEngine.getJobsReceivedList();
             CloudSim.stopSimulation();
             printJobList(outputList0);
-	    storageStrategy = datacenter0.getStorageStrategy();
-	    for (int i = 0; i < jobnum; i++) {
-              System.out.printf("%d ",storageStrategy[i]);
-	      if ((i != 0) && (i % 60 == 0))
-		System.out.printf("\n");
-            }
 	    System.out.printf("\n");
         } catch (Exception e) {
             Log.printLine("The simulation has been terminated due to an unexpected error");
@@ -324,5 +388,79 @@ public class WorkflowSimBasicExample1 {
             }
         }
 	Log.printLine("Workflow elapsed time is " + totalTime + " s.");
+    }
+
+    public static int initSimulator() {
+	    File daxFile = new File(daxPath);
+            if (!daxFile.exists()) {
+                Log.printLine("Warning: Please replace daxPath with the physical path in your working environment!");
+                System.exit(0);
+            }
+            int vmNum = 20;
+            Parameters.SchedulingAlgorithm sch_method = Parameters.SchedulingAlgorithm.MINMIN;
+            Parameters.PlanningAlgorithm pln_method = Parameters.PlanningAlgorithm.INVALID;
+            ReplicaCatalog.FileSystem file_system = ReplicaCatalog.FileSystem.SHARED;
+            OverheadParameters op = new OverheadParameters(0, null, null, null, null, 0);
+            ClusteringParameters.ClusteringMethod method = ClusteringParameters.ClusteringMethod.NONE;
+            ClusteringParameters cp = new ClusteringParameters(0, 0, method, null);
+            Parameters.init(vmNum, daxPath, null,
+                    null, op, cp, sch_method, pln_method,
+                    null, 0);
+            ReplicaCatalog.init(file_system);
+            int num_user = 1;
+            Calendar calendar = Calendar.getInstance();
+            boolean trace_flag = false;
+            WorkflowParser tmpParser = new WorkflowParser(999);
+            tmpParser.parse();
+            List<Task> mtask = tmpParser.getTaskList();
+            int jobNum = mtask.size();
+            taskType = new HashMap<>();
+            perTaskFiles = new HashMap<>();
+            files2Task = new HashMap<>();
+            files2Task = new HashMap<>();
+            String tmpType= null;
+            int typeNum = 0;
+            int outputFileNum = 0;
+	    int perFileStrategies = 0;
+	    for (int tid = 0; tid < mtask.size(); tid++) {
+                tmpType = mtask.get(tid).getType();
+
+                /*num of tasks of each type*/
+                if (taskType.containsKey(tmpType)) {
+                  typeNum = taskType.get(tmpType) + 1;
+                  taskType.put(tmpType, typeNum);
+                } else {
+                  taskType.put(tmpType, 1);
+                }
+
+                /*num of output files of each task*/
+                outputFileNum = 0;
+                if (!perTaskFiles.containsKey(tmpType)) {
+                  List<FileItem> fList = mtask.get(tid).getFileList();
+                  for (FileItem file : fList) {
+                    if (file.getType() == FileType.OUTPUT){
+                        outputFileNum++;
+                    }
+                  }
+                  perTaskFiles.put(tmpType, outputFileNum);
+                  /*System.out.printf("Debug!!! Task %s has %d output files\n", tmpType, outputFileNum);*/
+                  if (outputFileNum != 0) {
+                    perFileStrategies += outputFileNum;
+                  } else {
+                    /*At least one storage strtegy for each task*/
+                    perFileStrategies += 1;
+                  }
+                }
+
+                /*relation between task and files*/
+                List<FileItem> fList2 = mtask.get(tid).getFileList();
+                String taskFiles = "";
+                for (FileItem file : fList2) {
+                  taskFiles += file.getName();
+                }
+                files2Task.put(taskFiles, tmpType);
+                //System.out.println("Debug!!! Files of task " + tmpType + " is " + taskFiles);
+                }
+                return perFileStrategies;
     }
 }
