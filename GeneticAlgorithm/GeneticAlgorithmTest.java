@@ -65,12 +65,14 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 
 	public static void main(String[] args) {
 		daxPath = args[0];
+		System.err.println("Processing dax file: " + daxPath);
 	        int fileTypeNum = initSimulator();
 		System.out.printf("Num of file is %d\n", fileTypeNum);
 		GeneticAlgorithmTest test = new GeneticAlgorithmTest(fileTypeNum);
 		test.caculte();
 		int[] storageStrategy = test.bestX();
 		WorkfowSimulator(storageStrategy, true);
+		System.err.println("Processed dax file: " + daxPath);
 	}
 
 
@@ -235,7 +237,8 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
         String indent = "    ";
         Log.printLine();
 	Log.printLine("========== OUTPUT ==========");
-	Log.printLine("taskName" + indent + "taskNum" + indent + "parentNum" + indent + "childNum" + indent
+	Log.printLine("taskName" + indent + "taskNum" + indent + "inputSize" + indent + "parentNum" + indent
+			 + "outputFileNum" + indent + "outputFileID" + indent + "childNum" + indent
 			 + "depth" + "fileName" + indent + "fsize" + indent + "storageTier");
 	File outfile=new File("testlog.tsv");
 	RandomAccessFile raf=new RandomAccessFile(outfile, "rw");
@@ -259,6 +262,15 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 		if (perFileStorage == null) {
 		    break;
 		}
+		double inputSize = 0;
+		int outputFileNum = 0;
+		for (FileItem file : task.getFileList()){
+		    if (file.getType() == FileType.OUTPUT) {
+                        outputFileNum++;
+		    } else if (file.getType() == FileType.INPUT) {
+			inputSize += file.getSize();
+		    }
+		}
 		int fileid = 0;
 		for (FileItem file : task.getFileList()) {
 		    if (file.getType() == FileType.OUTPUT) {
@@ -267,7 +279,7 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 			int storageTier = perFileStorage.get(fileid);
 			fileid++;
 			//System.out.printf("%s\t%d\t%d\t%d\t%d\t%s\t%d\t%d\n",taskName, taskNum, parentNum, childNum, depth, fileName, fsize, storageTier);
-			String sOutput = String.format("%s\t%d\t%d\t%d\t%d\t%s\t%f\t%d\n",taskName, taskNum, parentNum, childNum, depth, fileName, fsize, storageTier);
+			String sOutput = String.format("%s\t%d\t%.1f\t%d\t%d\t%d\t%d\t%d\t%s\t%.1f\t%d\n",taskName, taskNum, inputSize, parentNum, outputFileNum, fileid, childNum, depth, fileName, fsize, storageTier);
 			raf.writeBytes(sOutput);
 		    }
 		}
@@ -347,9 +359,10 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 	    taskType = new HashMap<>();
 	    perTaskFiles = new HashMap<>();
 	    files2Task = new HashMap<>();
-	    files2Task = new HashMap<>();
+	    
 	    String tmpType= null;
 	    int typeNum = 0;
+	    int inputFileNum = 0;
 	    int outputFileNum = 0;
 	    /* Each task contains multiple storage strtegies, and each output file of that task maps to one storage strtegy.
 	     * Num of total storage strtegies = taskType0*NumofOutputFiles + taskType1*NumofOutputFiles + ... + taskTypeN*NumofOutputFiles
@@ -366,15 +379,19 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 		  taskType.put(tmpType, 1);
 		}
 
-		/*num of output files of each task*/
+		/*num of intput and output files of each task*/
+		inputFileNum = 0;
 	        outputFileNum = 0;
 		if (!perTaskFiles.containsKey(tmpType)) {
 		  List<FileItem> fList = mtask.get(tid).getFileList();
 		  for (FileItem file : fList) {
 	            if (file.getType() == FileType.OUTPUT){
 			outputFileNum++;
-		    }
+		    } else if (file.getType() == FileType.INPUT) {
+                        inputFileNum++;
+                    }
 		  }
+		  tmpType += inputFileNum;
 		  perTaskFiles.put(tmpType, outputFileNum);
 		  /*System.out.printf("Debug!!! Task %s has %d output files\n", tmpType, outputFileNum);*/
 		  if (outputFileNum != 0) {

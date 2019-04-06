@@ -417,10 +417,10 @@ public class WorkflowSimBasicExample1 {
             taskType = new HashMap<>();
             perTaskFiles = new HashMap<>();
             files2Task = new HashMap<>();
-            files2Task = new HashMap<>();
             String tmpType= null;
             int typeNum = 0;
             int outputFileNum = 0;
+	    int inputFileNum = 0;
 	    int perFileStrategies = 0;
 	    for (int tid = 0; tid < mtask.size(); tid++) {
                 tmpType = mtask.get(tid).getType();
@@ -433,15 +433,20 @@ public class WorkflowSimBasicExample1 {
                   taskType.put(tmpType, 1);
                 }
 
-                /*num of output files of each task*/
+                /*num of input and output files of each task*/
+		inputFileNum = 0;
                 outputFileNum = 0;
                 if (!perTaskFiles.containsKey(tmpType)) {
                   List<FileItem> fList = mtask.get(tid).getFileList();
                   for (FileItem file : fList) {
                     if (file.getType() == FileType.OUTPUT){
                         outputFileNum++;
-                    }
+                    } else if (file.getType() == FileType.INPUT) {
+			inputFileNum++;
+		    }
                   }
+		  /*System.out.printf("Debug!!! tmpType is %s\n",tmpType+inputFileNum);*/
+		  tmpType += inputFileNum;
                   perTaskFiles.put(tmpType, outputFileNum);
                   /*System.out.printf("Debug!!! Task %s has %d output files\n", tmpType, outputFileNum);*/
                   if (outputFileNum != 0) {

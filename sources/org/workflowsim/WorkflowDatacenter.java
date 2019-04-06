@@ -479,7 +479,6 @@ public class WorkflowDatacenter extends Datacenter {
 	String tasktype = mFiles2Task.get(myfiles);
 
 	//System.out.println("Debug!!! Current task type is " + tasktype);
-	
 
         for (FileItem file : fList) {
             if (file.getType() == FileType.OUTPUT)//output file*/
@@ -493,9 +492,9 @@ public class WorkflowDatacenter extends Datacenter {
 		    if (tasktype == null) {
 			myid = mHybridStorage.addFile(new File(file.getName(), fsize), 2);
 		    } else {
-			//System.out.println("Debug!!! get " + fileid + " th file for task " + tasktype + ", file is " + file.getName());
+			/*System.out.println("Debug!!! try to get " + fileid + " th file for task " + tasktype + ", file is " + file.getName());*/
                         myid = mHybridStorage.addFile(new File(file.getName(), fsize), mStorageStrategy.get(tasktype).get(fileid));
-			//System.out.println("Debug!!! get " + fileid + " th file for task " + mtaskType + ", file is " + file.getName());
+			/*System.out.println("Debug!!! retrieve " + fileid + " th file for task " + tasktype + ", file is " + file.getName());*/
 		    }
 		  }
                   if (myid == 0 || myid == 1 || myid == 2) {
