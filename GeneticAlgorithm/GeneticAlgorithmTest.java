@@ -69,6 +69,7 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 	        int fileTypeNum = initSimulator();
 		System.out.printf("Num of file is %d\n", fileTypeNum);
 		GeneticAlgorithmTest test = new GeneticAlgorithmTest(fileTypeNum);
+		test.setWorkflowSimInfo(daxPath, taskType, perTaskFiles, files2Task);
 		test.caculte();
 		int[] storageStrategy = test.bestX();
 		WorkfowSimulator(storageStrategy, true);
@@ -98,7 +99,7 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
   public static double WorkfowSimulator(int[] storageStrategy, boolean printLog) {
 	double totalTime = 0.0;
 	try {
-            int vmNum = 20;//number of vms;
+            int vmNum = 20;/*number of vms;*/
             File daxFile = new File(daxPath);
             if (!daxFile.exists()) {
                 Log.printLine("Warning: Please replace daxPath with the physical path in your working environment!");
@@ -117,8 +118,8 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
             int num_user = 1;
             Calendar calendar = Calendar.getInstance();
             boolean trace_flag = false;
-
-            CloudSim.init(num_user, calendar, trace_flag);
+	    CloudSim mCloudSim = new CloudSim();
+            mCloudSim.init(num_user, calendar, trace_flag);
             WorkflowDatacenter datacenter0 = createDatacenter("Datacenter_0");
             datacenter0.setHybridStorage();
 
@@ -150,9 +151,9 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
             List<CondorVM> vmlist0 = createVM(wfEngine.getSchedulerId(0), Parameters.getVmNum());
             wfEngine.submitVmList(vmlist0, 0);
             wfEngine.bindSchedulerDatacenter(datacenter0.getId(), 0);
-            CloudSim.startSimulation();
+            mCloudSim.startSimulation();
             List<Job> outputList0 = wfEngine.getJobsReceivedList();
-            CloudSim.stopSimulation();
+            mCloudSim.stopSimulation();
 	    for (Job job : outputList0) {
 		if (job.getCloudletStatus() == Cloudlet.SUCCESS) {
 		  totalTime += job.getActualCPUTime();
@@ -245,8 +246,10 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 	raf.seek(raf.length());
 	for (Job job : list) {
 	    if (job.getCloudletStatus() == Cloudlet.FAILED) {
+		System.out.println("Job " + job.getTaskList().get(0).getType() + " Failed");
 		break;
-	    }
+	    } 
+	
 	    for (Task task : job.getTaskList()) {
 		String taskName =  task.getType();
 		if (traveredFiles.containsKey(taskName)) {
@@ -258,7 +261,15 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
 		int childNum = task.getChildList().size();
 		int taskNum =  taskType.get(taskName);
 		int depth = task.getDepth();
-		List<Integer> perFileStorage = finalStorageStrategy.get(taskName);
+		/*Get input file num*/
+		int inputFileNum = 0;
+		for (FileItem file : task.getFileList()) {
+		    if (file.getType() == FileType.INPUT) {
+			inputFileNum++;
+		    }
+		}
+		String tmpNmae = taskName+inputFileNum;
+		List<Integer> perFileStorage = finalStorageStrategy.get(tmpNmae);
 		if (perFileStorage == null) {
 		    break;
 		}
