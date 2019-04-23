@@ -19,6 +19,7 @@ import java.io.File;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.List;
@@ -231,7 +232,8 @@ public class WorkflowSimBasicExample1 {
 		    currentTaskType++;
 		  }
 		  else {
-                    tmpTaskStorage.add(rand.nextInt(3));
+                    //tmpTaskStorage.add(rand.nextInt(3));
+                    tmpTaskStorage.add(0);
 		  }
                 }
                 perTaskstorage.put(tmpTask, tmpTaskStorage);
@@ -387,6 +389,30 @@ public class WorkflowSimBasicExample1 {
                         + dft.format(job.getFinishTime()) + indent + indent + indent + job.getDepth());
             }
         }
+
+        Map<String, Double> averageTime = new HashMap<>();
+        for (Job job : list) {
+          if (job.getTaskList().size() != 0) {
+            String taskName = job.getTaskList().get(0).getType();
+            if (averageTime.containsKey(taskName)) {
+              double tmptime = averageTime.get(taskName) + job.getIOTime();
+              averageTime.put(taskName, tmptime);
+            } else {
+              averageTime.put(taskName, job.getIOTime());
+            }
+          }
+        }
+        Iterator<Map.Entry<String, Double>> iterator = averageTime.entrySet().iterator();
+        while (iterator.hasNext()) {
+          Map.Entry<String, Double> entry = iterator.next();
+          String name = entry.getKey();
+          double averagetime = 0;
+          if (taskType.get(name) != null) {
+            averagetime = entry.getValue() / taskType.get(name);
+          }
+           Log.printLine("Job " + name + " average data transfer time is " + averagetime);
+        }
+
 	Log.printLine("Workflow elapsed time is " + totalTime + " s.");
     }
 

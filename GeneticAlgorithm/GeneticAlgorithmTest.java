@@ -363,7 +363,8 @@ public class GeneticAlgorithmTest extends GeneticAlgorithm {
             int num_user = 1;
             Calendar calendar = Calendar.getInstance();
             boolean trace_flag = false;
-	    WorkflowParser tmpParser = new WorkflowParser(999);
+	    //WorkflowParser tmpParser = new WorkflowParser(999);
+	    WorkflowParser tmpParser = new WorkflowParser(daxPath);
             tmpParser.parse();
 	    List<Task> mtask = tmpParser.getTaskList();
             jobNum = mtask.size();

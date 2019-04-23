@@ -36,6 +36,11 @@ public class Job extends Task {
     private List<Task> taskList;
 
     /**
+     * The io time of current job.
+     */
+    private double ioTime;
+
+    /**
      * Allocates a new Job object. The job length should be greater than or
      * equal to 1.
      *
@@ -52,6 +57,21 @@ public class Job extends Task {
 
         super(jobId, jobLength);
         this.taskList = new ArrayList<>();
+         this.ioTime = 0;
+    }
+
+    /**
+     * Get the io time.
+     */
+    public double getIOTime() {
+        return this.ioTime;
+    }
+
+    /**
+     * Set the io time.
+     */
+    public void setIOTime(double time) {
+        this.ioTime = time;
     }
 
     /**

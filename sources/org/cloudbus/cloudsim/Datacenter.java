@@ -774,6 +774,7 @@ public class Datacenter extends SimEntity {
 				}
 			}
 		}
+                //Log.printLine("Datacetner.java predictFileTransferTime once");
 		return time;
 	}
 

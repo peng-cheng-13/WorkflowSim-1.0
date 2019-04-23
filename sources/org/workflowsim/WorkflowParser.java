@@ -103,6 +103,20 @@ public final class WorkflowParser {
     }
 
     /**
+     * Initialize a WorkflowParser.
+     * @param path the path to xml file
+     */
+    public WorkflowParser(String path) {
+         this.userId = 0;
+         this.mName2Task = new HashMap<>();
+         this.daxPath = path;
+         this.daxPaths = null;
+         this.jobIdStartsFrom = 1;
+
+         setTaskList(new ArrayList<>());
+    }
+
+    /**
      * Start to parse a workflow which is a xml file(s).
      */
     public void parse() {

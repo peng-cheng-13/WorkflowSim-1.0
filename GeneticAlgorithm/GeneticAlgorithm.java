@@ -1,11 +1,13 @@
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.concurrent.*;
 
 public abstract class GeneticAlgorithm {
 	private List<Chromosome> population = new ArrayList<Chromosome>();
-	private int popSize = 200;
+	private int popSize = 100;
 	private int geneSize;
-	private int maxIterNum = 3;
+	private int maxIterNum = 100;
 	private double mutationRate = 0.1;
 	private int maxMutationNum = 20;
 	private int generation = 1;
@@ -17,6 +19,12 @@ public abstract class GeneticAlgorithm {
 	private double y;
 	private int geneI;
 	
+	private int taskSize = 1;
+	private String daxPath;
+	private HashMap<String, Integer> taskType;
+	private HashMap<String, Integer> perTaskFiles;
+	private HashMap<String, String> files2Task;
+
 	public GeneticAlgorithm(int geneSize) {
 		this.geneSize = geneSize;
 	}
@@ -102,6 +110,39 @@ public abstract class GeneticAlgorithm {
 		worstScore = population.get(0).getScore();
 		totalScore = 0;
 
+		// Failed to lauch multiple threads for parallel execution, Class CloudSim contains lots of static methods and variables, static variables are not thread safe.
+		/*Init resource pool//
+		ExecutorService pool = Executors.newFixedThreadPool(taskSize);
+		List<Future> list = new ArrayList<Future>();
+		HashMap<Future, Chromosome> tmpRelation = new HashMap<Future, Chromosome>();
+		int k = 0;
+		for (Chromosome chro : population) {
+                       if (chro == null) {
+				continue;
+			}
+			int[] x = changeX(chro);
+			Callable c = new CalculateScore(daxPath, taskType, perTaskFiles, files2Task, x, k);
+			Future f = pool.submit(c);
+			list.add(f);
+			tmpRelation.put(f, chro);
+			k++;
+		}	
+		pool.shutdown();
+		for (Future f : list) {
+			double score = 0;
+			try {
+			  score = (double) f.get();
+			} catch (Exception e) {
+			  
+			}
+			Chromosome chro = tmpRelation.get(f);
+			int id = population.indexOf(chro);
+			chro.setScore(score);
+			population.set(id, chro);
+                }
+
+		/*Finish parallel execution*/
+
 		for (Chromosome chro : population) {
 			setChromosomeScore(chro);
 			if (chro.getScore() > bestScore) {
@@ -142,6 +183,13 @@ public abstract class GeneticAlgorithm {
 		chro.setScore(y);
  
 	}
+
+       public void setWorkflowSimInfo(String path, HashMap<String, Integer> type, HashMap<String, Integer> files, HashMap<String, String> task) {
+	    daxPath = path;
+	    taskType = type;
+	    perTaskFiles = files;
+	    files2Task = task;
+       }
 
 	public abstract int[] changeX(Chromosome chro);
 	public abstract double caculateY(int[] x);

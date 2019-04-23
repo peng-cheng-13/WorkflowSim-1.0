@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.cloudbus.cloudsim.Log;
 import org.cloudbus.cloudsim.core.predicates.Predicate;
@@ -216,6 +217,7 @@ public class CloudSim {
 	 */
 	public static void stopSimulation() throws NullPointerException {
 		try {
+			finishSimulation();
 			runStop();
 		} catch (IllegalArgumentException e) {
 			throw new NullPointerException("CloudSim.stopCloudSimulation() : "
@@ -472,12 +474,17 @@ public class CloudSim {
 	 */
 	public static void addEntity(SimEntity e) {
 		SimEvent evt;
+		if (e == null)
+			Log.printLine("Debug!!! CloudSim. Entity is null");
+
 		if (running) {
 			// Post an event to make this entity
 			evt = new SimEvent(SimEvent.CREATE, clock, 1, 0, 0, e);
 			future.addEvent(evt);
 		}
 		if (e.getId() == -1) { // Only add once!
+			if (entities == null)
+				Log.printLine("Debug!!! CloudSim. entities is null");
 			int id = entities.size();
 			e.setId(id);
 			entities.add(e);
@@ -516,6 +523,7 @@ public class CloudSim {
 			ent = entities.get(i);
 			if (ent.getState() == SimEntity.RUNNABLE) {
 				ent.run();
+				//printMessage("Run entity: " + ent.getName());
 			}
 		}
 				
@@ -908,8 +916,8 @@ public class CloudSim {
 
 		double clock = clock();
 
-		finishSimulation();
-		runStop();
+
+
 
 		return clock;
 	}

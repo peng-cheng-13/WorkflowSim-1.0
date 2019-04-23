@@ -54,6 +54,7 @@ public abstract class SimEntity implements Cloneable {
 		this.name = name;
 		id = -1;
 		state = RUNNABLE;
+		
 		CloudSim.addEntity(this);
 	}
 

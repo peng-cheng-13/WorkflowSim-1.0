@@ -125,5 +125,6 @@ public class ReplicaCatalog {
         if (!list.contains(storage)) {
             list.add(storage);
         }
+	//dataReplicaCatalog.put(file, list);
     }
 }

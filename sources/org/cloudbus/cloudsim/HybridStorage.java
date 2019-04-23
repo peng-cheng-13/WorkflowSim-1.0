@@ -323,7 +323,7 @@ public class HybridStorage {
         public double predictFileReadTime(double fsize, int i) {
           double time = 0.0;
           double maxBwth = storageSystem[i].getMaxTransferRate();
-          time = 2*storageSystem[i].getLatency() + fsize / (double) Consts.MILLION / maxBwth;
+          time = storageSystem[i].getLatency() + fsize / (double) Consts.MILLION / maxBwth;
 	  return time;
         }
 

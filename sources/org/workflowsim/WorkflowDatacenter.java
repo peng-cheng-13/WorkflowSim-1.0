@@ -182,7 +182,7 @@ public class WorkflowDatacenter extends Datacenter {
                 fileTransferTime += processDataStageInForComputeJob(job.getFileList(), job);
                 //Log.printLine("Job ID: " + job.getCloudletId() + " file transferTime is " + fileTransferTime);
             }
-
+	    job.setIOTime(fileTransferTime);
             CloudletScheduler scheduler = vm.getCloudletScheduler();
             double estimatedFinishTime = scheduler.cloudletSubmit(job, fileTransferTime);
             updateTaskExecTime(job, vm);
@@ -279,6 +279,12 @@ public class WorkflowDatacenter extends Datacenter {
      */
     protected double processDataStageInForComputeJob(List<FileItem> requiredFiles, Job job) throws Exception {
         double time = 0.0;
+        String myfiles = "";
+        for (FileItem file : requiredFiles) {
+            myfiles += file.getName();
+        }
+        String tasktype = mFiles2Task.get(myfiles);
+        int fileid = 0;
         for (FileItem file : requiredFiles) {
             //The input file is not an output File 
             if (file.isRealInputFile(requiredFiles)) {
@@ -350,6 +356,10 @@ public class WorkflowDatacenter extends Datacenter {
 			time += mHybridStorage.predictFileReadTime(file.getSize(), 2);
                 }
 		
+            } else if (file.getType() == FileType.OUTPUT) {
+                int myid = mStorageStrategy.get(tasktype).get(fileid);
+                fileid++;
+                time += mHybridStorage.predictFileWriteTime(file.getSize(), myid);
             }
         }
         return time;

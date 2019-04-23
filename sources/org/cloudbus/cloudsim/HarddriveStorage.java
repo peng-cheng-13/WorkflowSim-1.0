@@ -388,7 +388,7 @@ public class HarddriveStorage implements Storage {
 			// total time for this operation
 			obj.setTransactionTime(seekTime + transferTime);
 		}
-
+		Log.printLine("HarddriveStorage getFile once");
 		return obj;
 	}
 
@@ -497,6 +497,7 @@ public class HarddriveStorage implements Storage {
 			result = seekTime + transferTime;  // add total time
 		}
 		file.setTransactionTime(result);
+                //Log.printLine("HarddriveStorage addFile once");
 		return result;
 	}
 
