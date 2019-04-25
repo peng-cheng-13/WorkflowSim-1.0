@@ -37,20 +37,20 @@ public class HybridStorage {
 	public HybridStorage() throws ParameterException {
                
 		storageSystem = new HarddriveStorage[3];
-                /*Init In-memory file system, 10000 MB*/
-                storageSystem[0] = new HarddriveStorage("Ramdisk", 10000);
-                storageSystem[0].setMaxTransferRate(1400);
+                /*Init In-memory file system, 620 GB*/
+                storageSystem[0] = new HarddriveStorage("Ramdisk", 634880);
+                storageSystem[0].setMaxTransferRate(1100);
                 storageSystem[0].setLatency(0);
                 storageSystem[0].setAvgSeekTime(0);
 
-                /*Init Local file system, 20000 MB*/
-                storageSystem[1] = new HarddriveStorage("LocalFS", 20000);
+                /*Init Local file system, 1240 GB*/
+                storageSystem[1] = new HarddriveStorage("LocalFS", 1269760);
                 storageSystem[1].setMaxTransferRate(1000);
                 storageSystem[1].setLatency(0.0001);
                 storageSystem[1].setAvgSeekTime(0.0001);
 
-                /*Init Parallel file system, 1000000 MB*/
-                storageSystem[2] = new HarddriveStorage("Lustre", 1000000);
+                /*Init Parallel file system, 1240 GB*/
+                storageSystem[2] = new HarddriveStorage("Lustre", 1269760);
                 storageSystem[2].setMaxTransferRate(600);
                 storageSystem[2].setLatency(0.1);
                 storageSystem[2].setAvgSeekTime(0.1);
@@ -311,7 +311,18 @@ public class HybridStorage {
 	 **/
 	public double predictFileWriteTime(double fsize, int i) {
             double time = 0.0;
-            time = storageSystem[i].getLatency() + fsize / (double) Consts.MILLION / storageSystem[i].getMaxTransferRate();
+            /*Byte to MB*/
+            double writeSize = fsize / (double) Consts.MILLION;
+            int id = i;
+            double remainSize = storageSystem[id].getAvailableSpace();
+            if (remainSize >= writeSize) {
+                time += storageSystem[id].getLatency() + writeSize / storageSystem[id].getMaxTransferRate();
+            } else {
+                time += storageSystem[id].getLatency() + remainSize / storageSystem[id].getMaxTransferRate();
+                writeSize -= remainSize;
+                /*Performance degradation becaused of interference between write request and backend data movement request*/
+                time += storageSystem[id].getLatency() + writeSize  / (storageSystem[id].getMaxTransferRate() / 2);
+            }
 	    return time;
         }
 

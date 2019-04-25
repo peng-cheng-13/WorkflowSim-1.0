@@ -35,7 +35,17 @@ public class FileItem {
 
     private double size;
 
+    private double memFreeSpace;
+
     private FileType type;
+
+    public void setMemFreeSpace(double space) {
+        memFreeSpace = space;
+    }
+
+    public double getMemFreeSpace() {
+        return this.memFreeSpace;
+    }
 
     public FileItem(String name, double size) {
         this.name = name;

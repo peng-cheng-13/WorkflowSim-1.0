@@ -308,7 +308,7 @@ public class WorkflowDatacenter extends Datacenter {
                   throw new Exception(file.getName() + " does not exist in hybrid storage");
                 }
 		
-		if ((storageID == 0) || (storageID == 1)) {
+		if (storageID == 0) {
                         int vmId = job.getVmId();
                         int userId = job.getUserId();
                         Host host = getVmAllocationPolicy().getHost(vmId, userId);
@@ -351,15 +351,30 @@ public class WorkflowDatacenter extends Datacenter {
 					time += mHybridStorage.predictFileReadTime(file.getSize(), storageID);
 				}
 			}
-		} else if (storageID == 2) {
+		} else if ((storageID == 1) || (storageID == 2)) {
 			ReplicaCatalog.addFileToStorage(file.getName(), this.getName());
 			time += mHybridStorage.predictFileReadTime(file.getSize(), 2);
                 }
 		
             } else if (file.getType() == FileType.OUTPUT) {
+                /*Add output file to shared storage*/
                 int myid = mStorageStrategy.get(tasktype).get(fileid);
-                fileid++;
                 time += mHybridStorage.predictFileWriteTime(file.getSize(), myid);
+                double memSpace = mHybridStorage.getAvailableSpace(0);
+                file.setMemFreeSpace(memSpace);
+                int fsize = (int) file.getSize()/1024/1024;
+                if (fsize == 0)
+                     fsize = 1;
+                if (!mHybridStorage.contains(file.getName())) {
+                    myid = mHybridStorage.addFile(new File(file.getName(), fsize), mStorageStrategy.get(tasktype).get(fileid));
+                }
+                if (myid == 0 || myid == 1 || myid == 2) {
+                    /*Log.printLine("addFile to storage once with id " + myid);*/
+                    if (tasktype != null) {
+                        mStorageStrategy.get(tasktype).set(fileid,myid);
+                    }
+                }
+                fileid++;
             }
         }
         return time;
@@ -493,6 +508,9 @@ public class WorkflowDatacenter extends Datacenter {
         for (FileItem file : fList) {
             if (file.getType() == FileType.OUTPUT)//output file*/
             {
+		int myid = mStorageStrategy.get(tasktype).get(fileid);
+                try {
+                /*
 		int myid = -1;
                 try{
                   int fsize = (int) file.getSize()/1024/1024;
@@ -502,19 +520,19 @@ public class WorkflowDatacenter extends Datacenter {
 		    if (tasktype == null) {
 			myid = mHybridStorage.addFile(new File(file.getName(), fsize), 2);
 		    } else {
-			/*System.out.println("Debug!!! try to get " + fileid + " th file for task " + tasktype + ", file is " + file.getName());*/
+			/*System.out.println("Debug!!! try to get " + fileid + " th file for task " + tasktype + ", file is " + file.getName());
                         myid = mHybridStorage.addFile(new File(file.getName(), fsize), mStorageStrategy.get(tasktype).get(fileid));
-			/*System.out.println("Debug!!! retrieve " + fileid + " th file for task " + tasktype + ", file is " + file.getName());*/
+			/*System.out.println("Debug!!! retrieve " + fileid + " th file for task " + tasktype + ", file is " + file.getName());
 		    }
 		  }
                   if (myid == 0 || myid == 1 || myid == 2) {
-		    //Log.printLine("addFile to storage once with id " + myid);
+		    /*Log.printLine("addFile to storage once with id " + myid);
 		    if (tasktype != null) {
                         mStorageStrategy.get(tasktype).set(fileid,myid);
 		    }
                     time = mHybridStorage.predictFileWriteTime(file.getSize(), myid);
                   } 
-		  
+		  */
 	  	  switch (myid) {
                     case 0:
                     case 1:
